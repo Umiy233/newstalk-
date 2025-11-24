@@ -1,0 +1,32 @@
+{
+  "name": "news-app-frontend",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "type-check": "vue-tsc --noEmit",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore"
+  },
+  "dependencies": {
+    "@arco-design/web-vue": "^2.55.0",
+    "axios": "^1.6.2",
+    "dayjs": "^1.11.10",
+    "dexie": "^3.2.4",
+    "pinia": "^2.1.6",
+    "socket.io-client": "^4.8.1",
+    "vue": "^3.3.8",
+    "vue-router": "^4.2.5",
+    "vue3-emoji-picker": "^1.1.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.4",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "@vue/test-utils": "^2.4.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.5",
+    "vitest": "^1.0.4",
+    "vue-tsc": "^1.8.22"
+  }
+}
