@@ -5,11 +5,9 @@
       :class="{ active: currentRoute === 'feed' }"
       @click="router.push('/feed')"
     >
-      <span class="icon">🏠</span>
       <span class="label">首页</span>
     </div>
     <div class="tab-item">
-      <span class="icon">🎬</span>
       <span class="label">视频</span>
     </div>
     <div 
@@ -24,7 +22,6 @@
       :class="{ active: currentRoute === 'messages' }"
       @click="router.push('/messages')"
     >
-      <span class="icon">💬</span>
       <span class="label">消息</span>
     </div>
     <div 
@@ -32,7 +29,6 @@
       :class="{ active: currentRoute === 'profile' }"
       @click="router.push('/profile')"
     >
-      <span class="icon">👤</span>
       <span class="label">我</span>
     </div>
   </div>

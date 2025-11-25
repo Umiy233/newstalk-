@@ -3,7 +3,7 @@
     <!-- Top Navigation Bar -->
     <header class="nav-bar">
       <div class="nav-left">
-        <div class="logo">News</div>
+        <!-- <div class="logo">News</div> -->
       </div>
       <div class="nav-center">
         <div 
@@ -29,11 +29,15 @@
         </div>
       </div>
       <div class="nav-right">
-        <button class="icon-btn mobile-search-btn">🔍</button>
+        <button class="icon-btn mobile-search-btn">
+          <img src="@/assets/icons/search.png" alt="搜索" style="width: 20px; height: 20px;">
+        </button>
         
         <div class="search-box">
           <input type="text" placeholder="搜索你感兴趣的内容..." />
-          <button>🔍</button>
+          <button>
+            <img src="@/assets/icons/search.png" alt="搜索" style="width: 20px; height: 20px;">
+          </button>
         </div>
         <MessageNotification />
         <router-link to="/editor" class="upload-btn">

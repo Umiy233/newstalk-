@@ -18,10 +18,6 @@
         </div>
         
         <div v-else class="messages-list">
-          <div v-if="messages.length === 0" class="empty-messages">
-            <div class="empty-icon">👋</div>
-            <p>打个招呼吧~</p>
-          </div>
           
           <div
             v-for="message in messages"
@@ -38,9 +34,11 @@
                 v-if="getSenderId(message) !== currentUserId"
                 class="avatar"
                 :style="getSenderAvatar(message) ? { backgroundImage: `url(${getSenderAvatar(message)})` } : {}"
+                @click="handleClick(message)"
               >
                 <span v-if="!getSenderAvatar(message)" class="avatar-text">
                   {{ getSenderUsername(message)?.charAt(0).toUpperCase() }}
+                  
                 </span>
               </div>
               
@@ -56,16 +54,18 @@
                 <span v-if="!authStore.currentUser?.avatar" class="avatar-text">
                   {{ authStore.currentUser?.username?.charAt(0).toUpperCase() }}
                 </span>
+                
               </div>
             </div>
           </div>
         </div>
-      </div>
-
-      <div class="page-footer">
         <div v-if="!isMutualFriend && hasSentMessage" class="limit-tip">
           需对方回复后才能继续发送
         </div>
+      </div>
+
+      <div class="page-footer">
+        
         <div class="input-bar">
           <button class="icon-btn voice-btn">🎤</button>
           <div class="input-box-wrapper">
@@ -77,7 +77,10 @@
               @keydown.enter="sendMessage"
             />
           </div>
-          <button class="icon-btn emoji-btn">😊</button>
+          <div v-if="showEmojiPicker" class="emoji-picker-wrapper">
+            <EmojiPicker @select="handleEmojiSelect" :native="true" :disable-skin-tones="true"/>
+          </div>
+          <button class="icon-btn emoji-btn" @click="showEmojiPicker = !showEmojiPicker">😊</button>
           <button 
             v-if="!messageContent.trim()" 
             class="icon-btn plus-btn"
@@ -104,6 +107,7 @@ import { io, Socket } from 'socket.io-client'
 import { apiClient } from '@/utils/api'
 import { formatDate } from '@/utils/common'
 import { useAuthStore } from '@/stores/auth'
+import { useRouter } from 'vue-router'
 
 interface MessageUser {
   _id: string
@@ -142,6 +146,7 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore()
 const currentUserId = authStore.currentUser?._id
+const router = useRouter()
 const socket = ref<Socket | null>(null)
 const messages = ref<Message[]>([])
 const messageContent = ref('')
@@ -149,6 +154,7 @@ const isLoading = ref(false)
 const isSending = ref(false)
 const hasSentMessage = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
+const showEmojiPicker = ref(false)
 
 // 初始化 WebSocket 连接
 const initSocket = () => {
@@ -213,12 +219,15 @@ const fetchConversation = async () => {
         (msg) => getSenderId(msg) === currentUserId
       )
       
-      scrollToBottom()
+      // scrollToBottom()
     }
   } catch (error) {
     console.error('Failed to fetch conversation:', error)
   } finally {
     isLoading.value = false
+    nextTick(()=>{
+      scrollToBottom()
+    })
   }
 }
 
@@ -255,6 +264,11 @@ const sendMessage = async () => {
     alert(error.response?.data?.message || '发送失败，请稍后重试')
     isSending.value = false
   }
+}
+
+//表情处理
+const handleEmojiSelect = (emoji:string)=>{
+//  TODO弹窗没有
 }
 
 // 滚动到底部
@@ -312,6 +326,14 @@ const markConversationAsRead = async () => {
   } catch (error) {
     console.error('❌ Failed to mark conversation as read:', error)
   }
+}
+
+//点击对方头像跳转到对方主页
+const handleClick =(message:Message)=>{
+   const senderId = getSenderId(message)
+   if(senderId){
+    router.push(`/profile/${senderId}`)
+   }
 }
 
 // 监听 visible 变化
@@ -439,9 +461,9 @@ onUnmounted(() => {
   max-width: 80%;
 }
 
-.message-sent .message-bubble-group {
+/* .message-sent .message-bubble-group {
   flex-direction: row-reverse;
-}
+} */
 
 .avatar {
   width: 36px;
@@ -542,6 +564,12 @@ onUnmounted(() => {
 .slide-right-enter-from,
 .slide-right-leave-to {
   transform: translateX(100%);
+}
+
+.limit-tip {
+  text-align: center;
+  color: #999;
+  margin-bottom: 12px;
 }
 </style>
 
