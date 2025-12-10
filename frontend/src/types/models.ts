@@ -68,7 +68,8 @@ export interface Draft {
   articleId?: string
   title: string
   content: string
-  images: DraftImage[]
+  images: ArticleImage[]
+  tags?: string
   lastSavedAt: string
   lastEditedAt: string
   status: 'editing' | 'saving' | 'synced'
@@ -84,7 +85,8 @@ export interface DraftImage {
 export interface SaveDraftRequest {
   title: string
   content: string
-  images: DraftImage[]
+  images: ArticleImage[]
+  tags?: string
   articleId?: string
 }
 
@@ -147,6 +149,7 @@ export interface IndexedDBDraft {
     isLocalPreview: boolean
     blob?: Blob
   }>
+  tags?: string
   lastEditedAt: number
   offlineOnly: boolean
 }

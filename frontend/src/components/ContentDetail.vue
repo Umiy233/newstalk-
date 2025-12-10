@@ -6,7 +6,7 @@
           <div class="spinner"></div>
         </div>
         
-        <div v-else-if="article" class="content-wrapper">
+        <div v-else-if="article" class="content-wrapper" ref="contentWrapperRef">
           <div class="container">
             <!-- Left: Image Carousel -->
             <aside class="aside">
@@ -73,7 +73,7 @@
               <div class="article-title">{{ article.title }}</div>
 
               <div class="content">
-                <div class="content-text">{{ article.content }}</div>
+                <div class="content-text" v-html="article.content"></div>
               </div>
 
               <div v-if="article.tags && article.tags.length > 0" class="tag-section">
@@ -158,45 +158,6 @@
                         </div>
                       </div>
 
-                      <!-- Reply Input (shown when replying) -->
-                      <div v-if="replyingTo === comment._id" class="reply-input-wrapper">
-                        <div class="reply-input">
-                          <div class="reply-input-row">
-                            <div class="textarea-wrapper">
-                              <textarea
-                                ref="replyInputRef"
-                                v-model="replyContent"
-                                :placeholder="`回复 ${replyingToUsername}：`"
-                                class="comment-textarea"
-                                rows="2"
-                                @keydown.ctrl.enter="submitReply(comment._id)"
-                                @keydown.meta.enter="submitReply(comment._id)"
-                              ></textarea>
-                              <button 
-                                class="emoji-btn-inline"
-                                @click.stop="handleEmojiBtnClick('reply', $event)"
-                                type="button"
-                                title="添加表情"
-                              >
-                                😊
-                              </button>
-                            </div>
-                          </div>
-                          <div v-if="showReplyEmojiPicker" class="emoji-picker-wrapper">
-                            <EmojiPicker @select="handleEmojiSelect" :native="false" />
-                          </div>
-                          <div class="reply-actions">
-                            <button class="cancel-reply-btn" @click="cancelReply">取消</button>
-                            <button 
-                              class="submit-reply-btn"
-                              :disabled="!replyContent.trim() || isSubmittingComment"
-                              @click="submitReply(comment._id)"
-                            >
-                              {{ isSubmittingComment ? '发送中...' : '发送' }}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -206,6 +167,10 @@
 
               <!-- Actions Section (Bottom) -->
               <div class="actions-section">
+                <!-- <div v-if="replyingTo" class="reply-hint">
+                  <span>回复 {{ replyingToUsername }}：</span>
+                  <button class="cancel-reply-hint-btn" @click="cancelReply">取消</button>
+                </div> -->
                 <div class="comment-input">
                     <div 
                       class="comment-avatar"
@@ -221,7 +186,7 @@
                           <textarea
                             ref="commentInputRef"
                             v-model="newComment"
-                            placeholder="写下你的评论..."
+                            :placeholder="replyingTo ? `回复 ${replyingToUsername}：` : '写下你的评论...'"
                             class="comment-textarea"
                             rows="2"
                             @focus="isCommentFocused = true"
@@ -239,9 +204,6 @@
                           </button>
                         </div>
                       </div>
-                      <div v-if="showEmojiPicker" class="emoji-picker-wrapper">
-                        <EmojiPicker @select="handleEmojiSelect" :native="true" :hide-search="true" :disable-skin-tones="true" />
-                      </div>
                       <button 
                         v-show="true"
                         class="submit-comment-btn"
@@ -253,6 +215,17 @@
                     </div>
                   
                   </div>
+                  <div v-if="showEmojiPicker" class="emoji-picker-wrapper">
+                    <EmojiPicker 
+                      @select="handleEmojiSelect" 
+                      :native="true" 
+                      :hide-search="true" 
+                      :disable-skin-tones="true"
+                      :hide-group-icons="false"
+                      :static-texts="{ placeholder: '搜索表情' }"
+                      class="custom-emoji-picker"
+                    />
+                  </div>
               </div>
             </main>
           </div>
@@ -263,7 +236,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiClient } from '@/utils/api'
 import { formatDate } from '@/utils/common'
@@ -318,17 +291,22 @@ const newComment = ref('')
 const isSubmittingComment = ref(false)
 const replyingTo = ref<string | null>(null)
 const replyingToUsername = ref<string>('')
-const replyContent = ref('')
 const isCommentFocused = ref(false)
 const showEmojiPicker = ref(false)
-const showReplyEmojiPicker = ref(false)
 const commentInputRef = ref<HTMLTextAreaElement | null>(null)
-const replyInputRef = ref<HTMLTextAreaElement | null>(null)
-const emojiPickerTarget = ref<'comment' | 'reply'>('comment')
+const contentWrapperRef = ref<HTMLElement | null>(null)
+
+// 防止重复调用
+const fetchingArticleId = ref<string | null>(null)
 
 const fetchArticleDetail = async () => {
   if (!props.articleId) return
 
+  if (fetchingArticleId.value === props.articleId && isLoading.value) {
+    return
+  }
+
+  fetchingArticleId.value = props.articleId
   isLoading.value = true
   try {
     const response = await apiClient.get(`/articles/${props.articleId}`)
@@ -357,6 +335,12 @@ const fetchArticleDetail = async () => {
     console.error('Failed to fetch article detail:', error)
   } finally {
     isLoading.value = false
+    // Clear fetching flag after a short delay to allow for rapid changes
+    setTimeout(() => {
+      if (fetchingArticleId.value === props.articleId) {
+        fetchingArticleId.value = null
+      }
+    }, 100)
   }
 }
 
@@ -406,9 +390,9 @@ const handleClose = () => {
   comments.value = []
   newComment.value = ''
   replyingTo.value = null
-  replyContent.value = ''
+  replyingToUsername.value = ''
   showEmojiPicker.value = false
-  showReplyEmojiPicker.value = false
+  fetchingArticleId.value = null
   document.body.style.overflow = ''
 }
 
@@ -436,15 +420,32 @@ const submitComment = async () => {
   isSubmittingComment.value = true
   showEmojiPicker.value = false
   try {
-    const response = await apiClient.post('/comments', {
-      articleId: props.articleId,
-      content: newComment.value.trim(),
-    })
+    // If replying to a comment, submit as reply
+    if (replyingTo.value) {
+      const response = await apiClient.post('/comments', {
+        articleId: props.articleId,
+        content: newComment.value.trim(),
+        parentId: replyingTo.value,
+      })
 
-    if (response.data) {
-      // Refresh comments
-      await fetchComments()
-      newComment.value = ''
+      if (response.data) {
+        // Refresh comments
+        await fetchComments()
+        newComment.value = ''
+        cancelReply()
+      }
+    } else {
+      // Submit as new comment
+      const response = await apiClient.post('/comments', {
+        articleId: props.articleId,
+        content: newComment.value.trim(),
+      })
+
+      if (response.data) {
+        // Refresh comments
+        await fetchComments()
+        newComment.value = ''
+      }
     }
   } catch (error) {
     console.error('Failed to submit comment:', error)
@@ -457,42 +458,20 @@ const submitComment = async () => {
 const startReply = (commentId: string, username?: string) => {
   replyingTo.value = commentId
   replyingToUsername.value = username || ''
-  replyContent.value = ''
+  newComment.value = ''
+  // Focus the bottom input
+  nextTick(() => {
+    commentInputRef.value?.focus()
+    isCommentFocused.value = true
+  })
 }
 
 const cancelReply = () => {
   replyingTo.value = null
   replyingToUsername.value = ''
-  replyContent.value = ''
-  showReplyEmojiPicker.value = false
+  newComment.value = ''
 }
 
-const submitReply = async (parentCommentId: string) => {
-  if (!authStore.isAuthenticated || !replyContent.value.trim() || isSubmittingComment.value) {
-    return
-  }
-
-  isSubmittingComment.value = true
-  showReplyEmojiPicker.value = false
-  try {
-    const response = await apiClient.post('/comments', {
-      articleId: props.articleId,
-      content: replyContent.value.trim(),
-      parentId: parentCommentId,
-    })
-
-    if (response.data) {
-      // Refresh comments
-      await fetchComments()
-      cancelReply()
-    }
-  } catch (error) {
-    console.error('Failed to submit reply:', error)
-    alert('回复失败，请稍后重试')
-  } finally {
-    isSubmittingComment.value = false
-  }
-}
 
 const handleLogin = () => {
   handleClose()
@@ -509,80 +488,63 @@ const handleCommentBlur = () => {
 }
 
 const handleEmojiSelect = (emoji: any) => {
-  if (emojiPickerTarget.value === 'comment') {
-    const input = commentInputRef.value
-    if (input) {
-      const start = input.selectionStart
-      const end = input.selectionEnd
-      const emojiText = emoji.i || emoji
-      newComment.value = newComment.value.substring(0, start) + emojiText + newComment.value.substring(end)
-      // Move cursor after the inserted emoji
-      setTimeout(() => {
-        input.focus()
-        const newPosition = start + emojiText.length
-        input.setSelectionRange(newPosition, newPosition)
-      }, 0)
-    }
-    showEmojiPicker.value = false
-  } else {
-    const input = replyInputRef.value
-    if (input) {
-      const start = input.selectionStart
-      const end = input.selectionEnd
-      const emojiText = emoji.i || emoji
-      replyContent.value = replyContent.value.substring(0, start) + emojiText + replyContent.value.substring(end)
-      // Move cursor after the inserted emoji
-      setTimeout(() => {
-        input.focus()
-        const newPosition = start + emojiText.length
-        input.setSelectionRange(newPosition, newPosition)
-      }, 0)
-    }
-    showReplyEmojiPicker.value = false
+  const input = commentInputRef.value
+  if (input) {
+    const start = input.selectionStart
+    const end = input.selectionEnd
+    const emojiText = emoji.i || emoji
+    newComment.value = newComment.value.substring(0, start) + emojiText + newComment.value.substring(end)
+    // Move cursor after the inserted emoji
+    setTimeout(() => {
+      input.focus()
+      const newPosition = start + emojiText.length
+      input.setSelectionRange(newPosition, newPosition)
+    }, 0)
   }
+  showEmojiPicker.value = false
 }
 
-const handleEmojiBtnClick = (target: 'comment' | 'reply', event?: MouseEvent) => {
+const handleEmojiBtnClick = (_target: 'comment' | 'reply', event?: MouseEvent) => {
   if (event) {
     event.stopPropagation()
     event.preventDefault()
   }
   
   // Focus input if not focused
-  if (target === 'comment' && !isCommentFocused.value) {
+  if (!isCommentFocused.value) {
     commentInputRef.value?.focus()
     // Wait a bit for focus to take effect
     setTimeout(() => {
-      toggleEmojiPicker(target, event)
+      toggleEmojiPicker(event)
     }, 50)
   } else {
-    toggleEmojiPicker(target, event)
+    toggleEmojiPicker(event)
   }
 }
 
-const toggleEmojiPicker = (target: 'comment' | 'reply', event?: MouseEvent) => {
+const toggleEmojiPicker = (event?: MouseEvent) => {
   if (event) {
     event.stopPropagation()
     event.preventDefault()
   }
   
-  emojiPickerTarget.value = target
-  if (target === 'comment') {
-    showEmojiPicker.value = !showEmojiPicker.value
-    showReplyEmojiPicker.value = false
-  } else {
-    showReplyEmojiPicker.value = !showReplyEmojiPicker.value
-    showEmojiPicker.value = false
-  }
+  showEmojiPicker.value = !showEmojiPicker.value
   
-  // Close emoji picker when clicking outside
-  if (showEmojiPicker.value || showReplyEmojiPicker.value) {
+  // Scroll to bottom when opening emoji picker
+  if (showEmojiPicker.value) {
     nextTick(() => {
+      if (contentWrapperRef.value) {
+        contentWrapperRef.value.scrollTo({
+          top: contentWrapperRef.value.scrollHeight,
+          behavior: 'smooth'
+        })
+      }
+      
+      // Close emoji picker when clicking outside
       const handleClickOutside = (e: MouseEvent) => {
         const target = e.target as HTMLElement
         if (!target.closest('.emoji-picker-wrapper') && !target.closest('.emoji-btn-inline')) {
           showEmojiPicker.value = false
-          showReplyEmojiPicker.value = false
           document.removeEventListener('click', handleClickOutside)
         }
       }
@@ -599,32 +561,20 @@ const goToProfile = (userId?: string) => {
   router.push(`/profile/${userId}`)
 }
 
-watch(() => props.articleId, (newId) => {
-  if (newId && props.visible) {
-    fetchArticleDetail()
-    fetchComments()
-  } else {
-    article.value = null
-    comments.value = []
-  }
-}, { immediate: true })
-
-watch(() => props.visible, (newVisible) => {
-  if (newVisible && props.articleId) {
+// Use a single watch to handle both articleId and visible changes
+watch([() => props.articleId, () => props.visible], ([newId, newVisible]) => {
+  if (newId && newVisible) {
     fetchArticleDetail()
     fetchComments()
     document.body.style.overflow = 'hidden'
   } else {
-    document.body.style.overflow = ''
+    if (!newVisible) {
+      article.value = null
+      comments.value = []
+      document.body.style.overflow = ''
+    }
   }
-})
-
-onMounted(() => {
-  if (props.articleId && props.visible) {
-    fetchArticleDetail()
-    fetchComments()
-  }
-})
+}, { immediate: true })
 </script>
 
 <style scoped>
@@ -859,8 +809,88 @@ onMounted(() => {
   font-size: 16px;
   line-height: 1.8;
   color: var(--text-primary);
-  white-space: pre-wrap;
   word-wrap: break-word;
+}
+
+.content-text :deep(h1) {
+  font-size: 2em;
+  font-weight: bold;
+  margin: 0.5em 0;
+}
+
+.content-text :deep(h2) {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin: 0.5em 0;
+}
+
+.content-text :deep(h3) {
+  font-size: 1.25em;
+  font-weight: bold;
+  margin: 0.5em 0;
+}
+
+.content-text :deep(ul),
+.content-text :deep(ol) {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.content-text :deep(li) {
+  margin: 0.25em 0;
+}
+
+.content-text :deep(blockquote) {
+  border-left: 3px solid #e5e7eb;
+  padding-left: 1em;
+  margin: 1em 0;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.content-text :deep(pre) {
+  background: #1f2937;
+  color: #f9fafb;
+  padding: 1em;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.content-text :deep(code) {
+  background: #f3f4f6;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+  font-family: 'Courier New', monospace;
+}
+
+.content-text :deep(pre code) {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+.content-text :deep(hr) {
+  border: none;
+  border-top: 2px solid #e5e7eb;
+  margin: 2em 0;
+}
+
+.content-text :deep(strong) {
+  font-weight: bold;
+}
+
+.content-text :deep(em) {
+  font-style: italic;
+}
+
+.content-text :deep(s) {
+  text-decoration: line-through;
+}
+
+.content-text :deep(p) {
+  margin: 0.5em 0;
 }
 
 .tag-section {
@@ -1179,18 +1209,11 @@ onMounted(() => {
 }
 
 .emoji-picker-wrapper {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  z-index: 1000;
+  width: 100%;
+  height: 300px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   background: var(--bg-color);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  max-width: 100%;
-  overflow: hidden;
-  transform: translateZ(0);
-  will-change: transform, opacity;
+  margin-top: 8px;
 }
 
 .input-container {
@@ -1250,6 +1273,31 @@ onMounted(() => {
   padding-top: 16px;
   border-top: 1px solid var(--border-color);
   margin-top: auto;
+}
+
+.reply-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.cancel-reply-hint-btn {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+}
+
+.cancel-reply-hint-btn:hover {
+  text-decoration: underline;
 }
 
 .heart-button {
@@ -1417,4 +1465,31 @@ onMounted(() => {
     z-index: 100;
   }
 }
+
+:deep(.v3-emoji-picker) {
+  width: 100% !important;
+  height: 100% !important;
+  background: var(--bg-color) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  --ep-color-bg: var(--bg-color) !important;
+  --ep-color-text: var(--text-primary) !important;
+  --ep-color-border: rgba(255, 255, 255, 0.1) !important;
+  --ep-color-hover: rgba(255, 255, 255, 0.1) !important;
+  --ep-color-active: rgba(255, 255, 255, 0.2) !important;
+  --ep-color-sbar: rgba(255, 255, 255, 0.2) !important;
+}
+
+:deep(.v3-header .v3-group) {
+  filter: invert(1) brightness(2);
+}
+
+:deep(.v3-sticky) {
+  display: none !important;
+}
+
+:deep(.v3-footer) {
+  display: none !important;
+}
 </style>
+

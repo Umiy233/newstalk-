@@ -118,16 +118,81 @@ onMounted(async () => {
   margin: var(--spacing-md) 0;
 }
 
-.article-body :deep(h2),
-.article-body :deep(h3) {
+.article-body :deep(h1) {
+  font-size: 2em;
+  font-weight: bold;
   margin: var(--spacing-lg) 0 var(--spacing-md) 0;
 }
 
+.article-body :deep(h2) {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin: var(--spacing-lg) 0 var(--spacing-md) 0;
+}
+
+.article-body :deep(h3) {
+  font-size: 1.25em;
+  font-weight: bold;
+  margin: var(--spacing-lg) 0 var(--spacing-md) 0;
+}
+
+.article-body :deep(ul),
+.article-body :deep(ol) {
+  padding-left: 1.5em;
+  margin: var(--spacing-md) 0;
+}
+
+.article-body :deep(li) {
+  margin: 0.25em 0;
+}
+
+.article-body :deep(blockquote) {
+  border-left: 3px solid #e5e7eb;
+  padding-left: 1em;
+  margin: var(--spacing-lg) 0;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.article-body :deep(pre) {
+  background: #1f2937;
+  color: #f9fafb;
+  padding: 1em;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: var(--spacing-lg) 0;
+}
+
 .article-body :deep(code) {
-  background: #f5f5f5;
-  padding: 2px 6px;
+  background: #f3f4f6;
+  padding: 0.2em 0.4em;
   border-radius: 3px;
-  font-family: monospace;
+  font-size: 0.9em;
+  font-family: 'Courier New', monospace;
+}
+
+.article-body :deep(pre code) {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+.article-body :deep(hr) {
+  border: none;
+  border-top: 2px solid #e5e7eb;
+  margin: var(--spacing-xl) 0;
+}
+
+.article-body :deep(strong) {
+  font-weight: bold;
+}
+
+.article-body :deep(em) {
+  font-style: italic;
+}
+
+.article-body :deep(s) {
+  text-decoration: line-through;
 }
 
 .article-images {

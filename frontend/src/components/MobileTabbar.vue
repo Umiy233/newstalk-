@@ -7,15 +7,19 @@
     >
       <span class="label">首页</span>
     </div>
-    <div class="tab-item">
-      <span class="label">视频</span>
+    <div 
+      class="tab-item" 
+      :class="{ active: currentRoute === 'feed' && isFollowingTab }"
+      @click="handleFollowingClick"
+    >
+      <span class="label">关注</span>
     </div>
     <div 
       class="tab-item" 
       :class="{ active: currentRoute === 'editor' }"
       @click="router.push('/editor')"
     >
-      <span class="icon highlight">➕</span>
+      <img src="@/assets/icons/publish.png" style="width: 20px; height: 20px;">
     </div>
     <div 
       class="tab-item" 
@@ -48,6 +52,15 @@ const currentRoute = computed(() => {
   if (route.path.startsWith('/messages')) return 'messages'
   return ''
 })
+
+const isFollowingTab = computed(() => {
+  return route.path.startsWith('/feed') && route.query.tab === 'following'
+})
+
+const handleFollowingClick = () => {
+  // 跳转到 Feed 页面并切换到关注 tab
+  router.push({ path: '/feed', query: { tab: 'following' } })
+}
 </script>
 
 <style scoped>

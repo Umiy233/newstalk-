@@ -232,6 +232,14 @@ const openMessageDialog = async (conv: Conversation) => {
     return
   }
 
+  // 立即更新本地未读数，提供即时反馈
+  if (conv.unreadCount > 0) {
+    conv.unreadCount = 0
+    // 重新计算总未读数
+    const newUnreadCount = conversations.value.reduce((total, c) => total + c.unreadCount, 0)
+    unreadCount.value = newUnreadCount
+  }
+
   // 获取用户详细信息，包括互相关注状态
   try {
     const response = await apiClient.get(`/auth/users/${conv.userId}`)
@@ -353,6 +361,7 @@ onUnmounted(() => {
 
 .notification-btn {
   position: relative;
+  top:30px
 }
 
 .badge {

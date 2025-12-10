@@ -4,7 +4,7 @@
     <header class="nav-bar">
       <div class="nav-title">消息</div>
       <div class="nav-right">
-        <button class="icon-btn">👤+</button>
+        <!-- <button class="icon-btn">👤+</button> -->
       </div>
     </header>
 
@@ -71,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { apiClient } from '@/utils/api'
 import { formatDate } from '@/utils/common'
 import { useAuthStore } from '@/stores/auth'
@@ -141,6 +141,11 @@ const fetchConversations = async () => {
 const openMessageDialog = async (conv: Conversation) => {
   if (!conv.userId) return
 
+  // 立即更新本地未读数，提供即时反馈
+  if (conv.unreadCount > 0) {
+    conv.unreadCount = 0
+  }
+
   // 简单的用户对象构造，实际可能需要获取更详细信息
   // 这里为了响应速度，直接使用 conversation 中的信息
   // 如果需要互相关注状态，可能需要额外请求，但在消息列表页通常已经是互相关注或有过交互
@@ -186,8 +191,9 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   position: relative;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  background-color: var(--bg-color);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--nav-bg);
+  backdrop-filter: blur(10px);
   z-index: 100;
 }
 

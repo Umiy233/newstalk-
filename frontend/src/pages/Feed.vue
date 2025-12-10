@@ -13,20 +13,6 @@
         >
           推荐
         </div>
-        <div 
-          class="nav-tab" 
-          :class="{ active: activeTab === 'following' }"
-          @click="switchTab('following')"
-        >
-          关注
-        </div>
-        <div 
-          class="nav-tab" 
-          :class="{ active: activeTab === 'hot' }"
-          @click="switchTab('hot')"
-        >
-          热榜
-        </div>
       </div>
       <div class="nav-right">
         <button class="icon-btn mobile-search-btn">
@@ -89,18 +75,56 @@
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
       >
-        <!-- Pull Refresh Indicator -->
+        <!-- 下拉刷新指示器 -->
         <div 
-          class="pull-indicator" 
-          :style="{ height: `${pullDistance}px`, opacity: pullDistance > 0 ? 1 : 0 }"
+          class="pull-refresh-indicator" 
+          :class="{ 
+            visible: pullDistance > 0 || isRefreshing,
+            loading: isRefreshing,
+            ready: pullDistance >= pullThreshold,
+            releasing: !canPull && pullDistance > 0
+          }"
         >
-          <div v-if="isRefreshing" class="spinner small"></div>
-          <span v-else>{{ pullDistance > 50 ? '释放刷新' : '下拉刷新' }}</span>
+          <div v-if="!isRefreshing" class="refresh-icon">
+            <span v-if="pullDistance < pullThreshold">↓</span>
+            <span v-else>↻</span>
+          </div>
+          <div v-else class="refresh-spinner"></div>
+          <span class="refresh-text">
+            {{ isRefreshing ? '正在刷新...' : (pullDistance >= pullThreshold ? '释放以刷新' : '下拉刷新') }}
+          </span>
         </div>
 
-        <div class="masonry-grid">
+        <div 
+          class="masonry-grid" 
+          :style="{ 
+            transform: `translateY(${pullDistance > 0 || isRefreshing ? Math.min(pullDistance, isRefreshing ? pullThreshold : pullThreshold + 20) : 0}px)`,
+            transition: (isRefreshing || (!canPull && pullDistance > 0)) ? 'transform 0.3s ease-out' : 'none'
+          }"
+        >
+          <!-- 骨架屏 -->
           <div
-            v-for="item in articles"
+            v-if="isLoading && articles.length === 0"
+            v-for="n in 6"
+            :key="`skeleton-${n}`"
+            class="video-card skeleton-card"
+          >
+            <div class="card-cover skeleton-cover">
+              <div class="skeleton-image"></div>
+            </div>
+            <div class="card-info">
+              <div class="skeleton-title"></div>
+              <div class="skeleton-title" style="width: 70%; margin-top: 8px;"></div>
+              <div class="card-footer" style="margin-top: 12px;">
+                <div class="skeleton-avatar"></div>
+                <div class="skeleton-text" style="width: 60px; margin-left: 8px;"></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 实际内容 -->
+          <div
+            v-for="(item, index) in articles"
             :key="item.id"
             class="video-card"
             @click="goToArticle(item.id)"
@@ -110,7 +134,8 @@
                 v-if="item.lastImageUrl" 
                 :src="item.lastImageUrl" 
                 :alt="item.title"
-                loading="lazy"
+                :loading="index < 4 ? 'eager' : 'lazy'"
+                :fetchpriority="index < 2 ? 'high' : 'auto'"
                 :style="getImageImgStyle(item)"
               />
               <div v-else class="no-image-placeholder">
@@ -169,12 +194,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { apiClient } from '@/utils/api'
-import { formatDate } from '@/utils/common'
 import type { FeedItem } from '@/types/models'
-import FollowButton from '@/components/FollowButton.vue'
 
 import { useAuthStore } from '@/stores/auth'
 import ContentDetail from '@/components/ContentDetail.vue'
@@ -182,16 +205,25 @@ import MessageNotification from '@/components/MessageNotification.vue'
 import MobileTabbar from '@/components/MobileTabbar.vue'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
 const articles = ref<FeedItem[]>([])
 const isLoading = ref(false)
 const hasMore = ref(true)
 const currentPage = ref(1)
-const activeTab = ref<'recommended' | 'following' | 'hot' | 'friends' | 'liked'>('recommended')
+const activeTab = ref<'recommended' | 'following' | 'video' | 'hot' | 'friends' | 'liked'>('recommended')
 const sidebarTab = ref<'home' | 'friends' | 'liked'>('home')
 const scrollContainer = ref<HTMLElement | null>(null)
 const selectedArticleId = ref<string | null>(null)
+
+// 下拉刷新相关
+const isRefreshing = ref(false)
+const pullDistance = ref(0)
+const pullThreshold = 60 // 触发刷新的阈值
+const startY = ref(0)
+const canPull = ref(false)
+const isMobile = ref(window.innerWidth <= 768)
 
 // Helper to calculate image styles
 const getImageStyle = (item: FeedItem) => {
@@ -223,59 +255,43 @@ const getImageImgStyle = (item: FeedItem) => {
   return {}
 }
 
-// Pull to Refresh
-const isPulling = ref(false)
-const pullDistance = ref(0)
-const isRefreshing = ref(false)
-const startY = ref(0)
-
-const handleTouchStart = (e: TouchEvent) => {
-  const scrollTop = scrollContainer.value?.scrollTop || 0
-  if (scrollTop === 0) {
-    startY.value = e.touches[0].clientY
-    isPulling.value = true
-  }
+// 更新移动端状态
+const updateIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768
 }
 
-const handleTouchMove = (e: TouchEvent) => {
-  if (!isPulling.value) return
-  const scrollTop = scrollContainer.value?.scrollTop || 0
-  if (scrollTop > 0) {
-    isPulling.value = false
-    return
-  }
-  
-  const currentY = e.touches[0].clientY
-  const diff = currentY - startY.value
-  
-  if (diff > 0) {
-    // Add resistance
-    pullDistance.value = Math.min(diff * 0.5, 80)
-    if (diff > 10 && e.cancelable) {
-      e.preventDefault() // Prevent browser refresh only if cancelable
+// 监听路由查询参数变化
+watch(() => route.query.tab, (newTab) => {
+  if (newTab === 'following') {
+    if (activeTab.value !== 'following') {
+      activeTab.value = 'following'
+      currentPage.value = 1
+      articles.value = []
+      hasMore.value = true
+      loadFeed()
     }
+  } else if (!newTab && activeTab.value === 'following') {
+    // 如果查询参数被清除，切换回推荐
+    activeTab.value = 'recommended'
+    currentPage.value = 1
+    articles.value = []
+    hasMore.value = true
+    loadFeed()
   }
-}
-
-const handleTouchEnd = async () => {
-  if (!isPulling.value) return
-  
-  if (pullDistance.value > 50) {
-    isRefreshing.value = true
-    pullDistance.value = 50 // Hold position
-    await loadFeed(true) // Force reload
-    setTimeout(() => {
-      isRefreshing.value = false
-      pullDistance.value = 0
-    }, 500)
-  } else {
-    pullDistance.value = 0
-  }
-  isPulling.value = false
-}
+})
 
 onMounted(() => {
+  // 检查路由参数，如果有tab参数，切换到对应的tab
+  const tabParam = route.query.tab as string
+  if (tabParam === 'following') {
+    activeTab.value = 'following'
+  }
   loadFeed()
+  window.addEventListener('resize', updateIsMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateIsMobile)
 })
 
 const switchSidebarTab = async (tab: 'home' | 'friends' | 'liked') => {
@@ -313,6 +329,12 @@ const switchTab = async (tab: 'recommended' | 'following' | 'hot') => {
   }
   
   activeTab.value = tab
+  // 更新路由查询参数
+  if (tab === 'following') {
+    router.push({ path: '/feed', query: { tab: 'following' } })
+  } else {
+    router.push({ path: '/feed', query: {} })
+  }
   currentPage.value = 1
   articles.value = []
   hasMore.value = true
@@ -475,6 +497,88 @@ const goToArticle = (id: string) => {
   // 防止背景滚动
   document.body.style.overflow = 'hidden'
 }
+
+// 下拉刷新事件处理
+const handleTouchStart = (e: TouchEvent) => {
+  if (!scrollContainer.value) return
+  
+  // 获取正确的滚动容器（移动端可能是 main-content）
+  const isMobile = window.innerWidth <= 768
+  const scrollElement = isMobile 
+    ? (scrollContainer.value.closest('.main-content') as HTMLElement || scrollContainer.value)
+    : scrollContainer.value
+  
+  // 只有当滚动到顶部时才允许下拉刷新
+  const scrollTop = scrollElement.scrollTop
+  if (scrollTop === 0 && !isRefreshing.value) {
+    canPull.value = true
+    startY.value = e.touches[0].clientY
+  }
+}
+
+const handleTouchMove = (e: TouchEvent) => {
+  if (!canPull.value || isRefreshing.value || !scrollContainer.value) return
+  
+  // 获取正确的滚动容器（移动端可能是 main-content）
+  const isMobile = window.innerWidth <= 768
+  const scrollElement = isMobile 
+    ? (scrollContainer.value.closest('.main-content') as HTMLElement || scrollContainer.value)
+    : scrollContainer.value
+  
+  const currentY = e.touches[0].clientY
+  const distance = currentY - startY.value
+  
+  // 只有向下拉时才处理
+  if (distance > 0) {
+    // 检查是否仍然在顶部
+    const scrollTop = scrollElement.scrollTop
+    if (scrollTop === 0) {
+      // 添加阻尼效果，拉得越远阻力越大
+      pullDistance.value = distance * 0.5
+      
+      // 如果拉得太远，阻止默认行为以避免页面滚动
+      if (distance > 10) {
+        e.preventDefault()
+      }
+    } else {
+      // 如果不在顶部了，重置
+      canPull.value = false
+      pullDistance.value = 0
+    }
+  }
+}
+
+const handleTouchEnd = async () => {
+  if (!canPull.value || isRefreshing.value) return
+  
+  // 如果拉动距离超过阈值，触发刷新
+  if (pullDistance.value >= pullThreshold) {
+    isRefreshing.value = true
+    // 保持在刷新位置
+    pullDistance.value = pullThreshold
+    
+    try {
+      await loadFeed(true)
+      // 刷新成功后等待一小段时间再隐藏指示器
+      await new Promise(resolve => setTimeout(resolve, 300))
+    } catch (error) {
+      console.error('Refresh error:', error)
+    } finally {
+      isRefreshing.value = false
+      // 平滑收回指示器
+      await new Promise(resolve => {
+        pullDistance.value = 0
+        setTimeout(resolve, 300)
+      })
+    }
+  } else {
+    // 没有达到阈值，直接收回
+    pullDistance.value = 0
+  }
+  
+  // 重置状态
+  canPull.value = false
+}
 </script>
 
 <style scoped>
@@ -494,7 +598,8 @@ const goToArticle = (id: string) => {
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  background-color: var(--bg-color);
+  background: var(--nav-bg);
+  backdrop-filter: blur(10px);
   z-index: 100;
 }
 
@@ -649,23 +754,79 @@ const goToArticle = (id: string) => {
   overflow-y: auto;
   padding: 24px;
   /* Smooth scrolling */
-  -webkit-overflow-scrolling: touch; 
+  -webkit-overflow-scrolling: touch;
+  position: relative;
 }
 
-.pull-indicator {
+/* 下拉刷新指示器 */
+.pull-refresh-indicator {
+  position: absolute;
+  top: -60px;
+  left: 0;
+  right: 0;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  transition: height 0.2s;
+  gap: 8px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 14px;
+  transition: opacity 0.2s ease-out;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 10;
 }
 
-.spinner.small {
+.pull-refresh-indicator.visible {
+  opacity: 1;
+}
+
+.pull-refresh-indicator.loading,
+.pull-refresh-indicator.releasing {
+  transition: transform 0.3s ease-out, opacity 0.2s ease-out;
+}
+
+.pull-refresh-indicator.ready .refresh-icon {
+  color: var(--primary-color);
+}
+
+.pull-refresh-indicator.ready .refresh-text {
+  color: var(--primary-color);
+}
+
+.refresh-icon {
+  font-size: 20px;
+  transition: transform 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pull-refresh-indicator.ready .refresh-icon {
+  animation: rotateIcon 0.5s ease-in-out;
+}
+
+@keyframes rotateIcon {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(180deg);
+  }
+}
+
+.refresh-spinner {
   width: 20px;
   height: 20px;
-  border-width: 2px;
+  border: 2px solid rgba(254, 44, 85, 0.2);
+  border-radius: 50%;
+  border-top-color: var(--primary-color);
+  animation: spin 0.8s linear infinite;
+}
+
+.refresh-text {
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .masonry-grid {
@@ -680,6 +841,9 @@ const goToArticle = (id: string) => {
 .video-card {
   position: relative;
   cursor: pointer;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .card-cover {
@@ -698,6 +862,7 @@ const goToArticle = (id: string) => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   transition: transform 0.3s;
 }
 
@@ -797,11 +962,13 @@ const goToArticle = (id: string) => {
 }
 
 .card-info {
-  margin-top: 12px;
+  margin-top: 0;
+  background-color: var(--bg-secondary);
+  padding: 12px;
 }
 
 .card-title {
-  font-size: 15px;
+  font-size: 13px;
   color: var(--text-primary);
   margin-bottom: 8px;
   line-height: 1.4;
@@ -882,6 +1049,34 @@ const goToArticle = (id: string) => {
     padding: 0;
     height: auto; /* Let content flow */
     overflow: visible;
+    position: relative;
+  }
+  
+  /* 移动端下拉刷新指示器 */
+  .pull-refresh-indicator {
+    position: fixed;
+    top: 50px; /* 顶部导航栏高度 */
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: var(--bg-color);
+    z-index: 99;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .pull-refresh-indicator.visible {
+    opacity: 1;
+  }
+  
+  .pull-refresh-indicator.loading {
+    opacity: 1;
+  }
+  
+  /* 确保 masonry-grid 在移动端也能正确下拉 */
+  .masonry-grid {
+    will-change: transform;
   }
   
   .nav-bar {
@@ -891,7 +1086,8 @@ const goToArticle = (id: string) => {
     right: 0;
     height: 50px;
     padding: 0 16px;
-    background: rgba(22, 24, 35, 0.98);
+    background: var(--nav-bg);
+    backdrop-filter: blur(10px);
     border-bottom: none;
     justify-content: center;
   }
@@ -948,7 +1144,7 @@ const goToArticle = (id: string) => {
     width: 100%;
     background: var(--bg-secondary);
     margin-bottom: 8px;
-    border-radius: 4px;
+    border-radius: 8px;
     overflow: hidden;
     display: inline-block; /* Prevent break inside columns */
     break-inside: avoid;
@@ -957,33 +1153,37 @@ const goToArticle = (id: string) => {
   
   .card-cover {
     border-radius: 0;
-    padding-bottom: 0; /* Fix: Reset padding-bottom to remove black gap */
-    height: auto;
-    min-height: auto; /* Allow it to be smaller if image is small */
+    padding-bottom: 133%; /* 保持固定比例，确保图片区域占满上半部分 */
+    height: 0;
     background-color: var(--bg-secondary);
   }
 
   .card-cover img {
-    position: static; /* Allow image to dictate height */
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
-    height: auto;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
     display: block;
   }
   
   .card-info {
-    padding: 8px;
+    padding: 10px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    background-color: var(--bg-secondary);
   }
   
   .card-title {
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: 12px;
+    line-height: 1.4;
     margin-bottom: 8px;
-    font-weight: 600; /* Bolder title */
-    color: #f1f1f1; /* Brighter text for dark mode */
-    letter-spacing: 0.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: 0.2px;
   }
   
   .card-author {
@@ -1053,7 +1253,7 @@ const goToArticle = (id: string) => {
   }
 
   .card-title {
-    font-size: 14px;
+    font-size: 12px;
     line-height: 1.4;
     margin-bottom: 8px;
     font-weight: 500;
@@ -1064,6 +1264,90 @@ const goToArticle = (id: string) => {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+}
+
+/* 骨架屏样式 */
+.skeleton-card {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-cover {
+  position: relative;
+  background: var(--bg-secondary);
+}
+
+.skeleton-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+.skeleton-title {
+  height: 14px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: 4px;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+.skeleton-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+.skeleton-text {
+  height: 12px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: 4px;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
   }
 }
 </style>

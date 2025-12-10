@@ -5,9 +5,9 @@
       <div class="orb orb-2"></div>
     </div>
     
-    <div class="login-card glass">
+    <div class="login-card">
       <div class="card-header">
-        <div class="logo">News</div>
+        <div class="logo">就看看桑</div>
         <h2>欢迎回来</h2>
         <p class="subtitle">登录以发现更多精彩内容</p>
       </div>
@@ -15,7 +15,7 @@
       <form @submit.prevent="handleLogin" class="login-form">
         <div class="form-group">
           <div class="input-wrapper">
-            <span class="icon">👤</span>
+            <img src="@/assets/icons/account.png" alt="account" class="icon" style="width: 20px; height: 20px;">
             <input
               id="username"
               v-model="form.username"
@@ -29,7 +29,7 @@
 
         <div class="form-group">
           <div class="input-wrapper">
-            <span class="icon">🔒</span>
+            <img src="@/assets/icons/password.png" alt="password" class="icon" style="width: 20px; height: 20px;">
             <input
               id="password"
               v-model="form.password"
@@ -99,7 +99,7 @@ const handleLogin = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #000;
+  background-color: #fff;
   overflow: hidden;
 }
 
@@ -110,6 +110,7 @@ const handleLogin = async () => {
   width: 100%;
   height: 100%;
   z-index: 0;
+  display: none;
 }
 
 .orb {
@@ -145,19 +146,44 @@ const handleLogin = async () => {
 .login-card {
   position: relative;
   z-index: 1;
-  width: 100%;
+  width: 90%;
   max-width: 400px;
   padding: 40px;
   border-radius: 20px;
-  color: white;
+  color: #333;
+  position: relative;
+  background: #fff;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
+/* 
+.login-card::after,.login-card::before{
+  --angle:0deg;
+content:'';
+position:absolute;
+height:100%;
+width:100%;
+background-image:conic-gradient(from var(--angle),transparent 30%,blue);
+left:50%;
+top:50%;
+translate: -50% -50%;
+z-index:-1;
+padding:3px;
+border-radius:10px;
+animation:3s spin linear infinite;
+}
+.login-card::before{
+  filter:blur(1.5rem);
+  opacity:0.5;
+}
+@keyframes spin{
+  from{
+    --angle:0deg;
+  }
+  to{
+    --angle:360deg;
+  }
+} */
 
-.glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-}
 
 .card-header {
   text-align: center;
@@ -168,7 +194,7 @@ const handleLogin = async () => {
   font-size: 32px;
   font-weight: 800;
   margin-bottom: 16px;
-  background: linear-gradient(to right, #25f4ee, #fe2c55);
+  background: linear-gradient(to right, black,blue);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -177,10 +203,11 @@ const handleLogin = async () => {
 h2 {
   font-size: 24px;
   margin-bottom: 8px;
+  color: #333;
 }
 
 .subtitle {
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(0, 0, 0, 0.6);
   font-size: 14px;
 }
 
@@ -190,15 +217,15 @@ h2 {
 
 .input-wrapper {
   position: relative;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.05);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   transition: all 0.3s;
 }
 
 .input-wrapper:focus-within {
-  border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(0, 0, 0, 0.4);
+  border-color: #fe2c55;
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .icon {
@@ -215,13 +242,13 @@ input {
   background: transparent;
   border: none;
   padding: 16px 16px 16px 48px;
-  color: white;
+  color: #333;
   font-size: 15px;
   outline: none;
 }
 
 input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(0, 0, 0, 0.4);
 }
 
 .submit-btn {
@@ -262,7 +289,7 @@ input::placeholder {
   text-align: center;
   margin-top: 24px;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(0, 0, 0, 0.6);
 }
 
 .card-footer a {
@@ -275,9 +302,9 @@ input::placeholder {
   display: inline-block;
   width: 20px;
   height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  border: 2px solid rgba(0, 0, 0, 0.3);
   border-radius: 50%;
-  border-top-color: white;
+  border-top-color: #333;
   animation: spin 0.8s linear infinite;
 }
 

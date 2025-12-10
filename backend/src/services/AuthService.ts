@@ -44,7 +44,6 @@ export class AuthService {
     const token = generateAccessToken(user.id, user.email)
     const refreshToken = generateRefreshToken(user.id, user.email)
 
-    // 将 refresh token 保存到 Redis（可选，用于更复杂的场景）
     try {
       if (redisClient.isOpen) {
         await redisClient.setEx(
@@ -75,13 +74,13 @@ export class AuthService {
     }).select('+passwordHash')
 
     if (!user) {
-      throw new ApiError(ErrorCodes.USER_NOT_FOUND, 'Invalid username or password', 401)
+      throw new ApiError(ErrorCodes.USER_NOT_FOUND, '账号或密码错误', 401)
     }
 
     // 验证密码
     const isPasswordValid = await user.comparePassword(req.password)
     if (!isPasswordValid) {
-      throw new ApiError(ErrorCodes.INVALID_PASSWORD, 'Invalid password', 401)
+      throw new ApiError(ErrorCodes.INVALID_PASSWORD, '账号或密码错误', 401)
     }
 
     // 更新最后登录时间

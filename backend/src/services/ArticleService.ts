@@ -46,6 +46,9 @@ export class ArticleService {
     // Increment view count
     await Article.findByIdAndUpdate(id, { $inc: { viewCount: 1 } })
     
+    // Update the viewCount in the returned object to reflect the increment
+    ;(article as any).viewCount = ((article as any).viewCount || 0) + 1
+    
     // Populate follow status and like status if user is logged in
     if (currentUserId) {
       // Set like status

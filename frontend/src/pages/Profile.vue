@@ -4,10 +4,9 @@
     <nav class="nav-bar">
       <div class="nav-left" @click="router.push('/feed')">
         <span class="back-icon">←</span>
-        <span class="logo">News</span>
       </div>
       <div class="nav-right">
-        <MessageNotification />
+        <!-- <MessageNotification /> -->
         <button class="icon-btn" @click="openSettings">⋯</button>
       </div>
     </nav>
@@ -92,13 +91,13 @@
       >
         喜欢
       </div>
-      <div 
+      <!-- <div 
         class="tab-item" 
         :class="{ active: activeTab === 'private' }"
         @click="activeTab = 'private'"
       >
         私密
-      </div>
+      </div> -->
     </div>
 
     <!-- Content Grid -->
@@ -139,7 +138,6 @@
     <div class="content-grid" v-if="activeTab === 'likes'">
       <div v-if="isLoading" class="loading">加载中...</div>
       <div v-else-if="likedArticles.length === 0" class="empty-state">
-        <div class="empty-icon">❤️</div>
         <p>还没有喜欢的作品</p>
       </div>
       <div v-else class="grid-layout">
@@ -182,17 +180,17 @@
               <span>个人资料</span>
               <span class="arrow">›</span>
             </div>
-            <div class="setting-item">
+            <!-- <div class="setting-item">
               <span>账号安全</span>
               <span class="arrow">›</span>
-            </div>
+            </div> -->
           </div>
           
           <div class="setting-group">
             <label>通用</label>
-            <div class="setting-item">
+            <div class="setting-item" @click="themeStore.toggleTheme">
               <span>深色模式</span>
-              <div class="switch active"></div>
+              <div class="switch" :class="{ active: themeStore.mode === 'dark' }"></div>
             </div>
           </div>
 
@@ -210,10 +208,6 @@
         </div>
           <div class="modal-body">
              <form @submit.prevent="handleUpdateProfile">
-              <div class="form-group">
-                <label>头像 URL</label>
-                <input v-model="editForm.avatar" type="text" placeholder="头像图片链接" class="dark-input" />
-              </div>
               <div class="form-group">
                 <label>用户名</label>
                 <input v-model="editForm.username" type="text" placeholder="用户名" class="dark-input" required />
@@ -248,6 +242,14 @@
       @close="showMessageDialog = false"
     />
 
+    <!-- Content Detail Modal -->
+    <ContentDetail 
+      v-if="selectedArticleId" 
+      :article-id="selectedArticleId"
+      :visible="!!selectedArticleId"
+      @close="selectedArticleId = null"
+    />
+
   </div>
 </template>
 
@@ -255,16 +257,19 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 import { apiClient } from '@/utils/api'
 import type { FeedItem } from '@/types/models'
 import FollowButton from '@/components/FollowButton.vue'
 import AvatarDialog from '@/components/AvatarDialog.vue'
 import MessageDialog from '@/components/MessageDialog.vue'
 import MessageNotification from '@/components/MessageNotification.vue'
+import ContentDetail from '@/components/ContentDetail.vue'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const themeStore = useThemeStore()
 
 // Reactive state variables must be declared BEFORE they are used in functions
 const activeTab = ref('works')
@@ -288,6 +293,7 @@ const editForm = ref({
 const user = ref<any>(null)
 const followStatus = ref<'none' | 'following' | 'friend' | 'self'>('none')
 const isFollowedBy = ref(false)
+const selectedArticleId = ref<string | null>(null)
 
 const routeUserId = computed(() => route.params.id as string)
 const isOwnProfile = computed(() => {
@@ -523,7 +529,13 @@ watch(() => activeTab.value, (newTab) => {
 })
 
 const goToArticle = (id: string) => {
-  router.push(`/article/${id}`)
+  if (isOwnProfile.value) {
+    // 自己的文章 - 跳转到编辑器
+    router.push(`/editor?articleId=${id}`)
+  } else {
+    // 别人的文章 - 显示详细内容
+    selectedArticleId.value = id
+  }
 }
 
 const openSettings = () => {
@@ -585,6 +597,9 @@ const openMessageDialog = () => {
   background-color: var(--bg-color);
   color: var(--text-primary);
   padding-bottom: 40px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Nav */
@@ -597,8 +612,9 @@ const openMessageDialog = () => {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(22, 24, 35, 0.8);
+  background: var(--nav-bg);
   backdrop-filter: blur(10px);
+  color: var(--text-primary);
 }
 
 .nav-left {
@@ -610,6 +626,7 @@ const openMessageDialog = () => {
 
 .back-icon {
   font-size: 20px;
+  color: var(--text-primary);
 }
 
 .logo {
@@ -619,7 +636,7 @@ const openMessageDialog = () => {
 
 .icon-btn {
   font-size: 20px;
-  color: white;
+  color: var(--text-primary);
   margin-left: 16px;
   padding: 8px;
   border-radius: 50%;
@@ -627,7 +644,7 @@ const openMessageDialog = () => {
 }
 
 .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--hover-color);
 }
 
 /* Profile Header */
@@ -800,7 +817,8 @@ const openMessageDialog = () => {
 }
 
 .tab-item.active {
-  color: white;
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .tab-item.active::after {
@@ -815,18 +833,37 @@ const openMessageDialog = () => {
 
 /* Grid */
 .content-grid {
-  padding: 20px 24px;
+  padding: 20px 12px;
   min-height: 300px;
+  overflow-x: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .grid-layout {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .grid-item {
   cursor: pointer;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  transition: border-color 0.3s ease;
+}
+
+.grid-item:hover {
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .cover-wrapper {
@@ -834,9 +871,9 @@ const openMessageDialog = () => {
   padding-bottom: 133%;
   position: relative;
   background: var(--bg-secondary);
-  border-radius: 8px;
   overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: 0;
+  box-sizing: border-box;
 }
 
 .cover-img {
@@ -932,6 +969,9 @@ const openMessageDialog = () => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   color: var(--text-secondary);
+  padding: 8px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--bg-secondary);
 }
 
 /* Empty State */
@@ -966,7 +1006,7 @@ const openMessageDialog = () => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5);
+  background: light-dark(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.5));
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -975,18 +1015,22 @@ const openMessageDialog = () => {
 
 .settings-modal {
   width: 400px;
-  background: #252632;
+  background: var(--bg-secondary);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  box-shadow: 0 10px 40px light-dark(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.5));
 }
 
 .modal-header {
   padding: 16px 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.modal-header h3 {
+  color: var(--text-primary);
 }
 
 .close-btn {
@@ -1020,7 +1064,7 @@ const openMessageDialog = () => {
 }
 
 .setting-item:hover span {
-  color: white;
+  color: var(--text-primary);
 }
 
 .arrow {
@@ -1030,15 +1074,16 @@ const openMessageDialog = () => {
 .logout-btn {
   width: 100%;
   padding: 14px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--hover-color);
   color: #ff4c4c;
   border-radius: 8px;
   font-weight: 600;
   margin-top: 10px;
+  transition: background 0.2s;
 }
 
 .logout-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.12));
 }
 
 .loading {
@@ -1061,13 +1106,17 @@ const openMessageDialog = () => {
 
 .dark-input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: light-dark(rgba(0, 0, 0, 0.03), rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 12px;
-  color: white;
+  color: var(--text-primary);
   font-size: 14px;
   transition: border-color 0.2s;
+}
+
+.dark-input::placeholder {
+  color: var(--text-tertiary);
 }
 
 .dark-input:focus {
@@ -1093,5 +1142,37 @@ const openMessageDialog = () => {
 .save-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Switch Toggle */
+.switch {
+  width: 44px;
+  height: 24px;
+  background: light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.2));
+  border-radius: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.switch.active {
+  background: var(--primary-color);
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.switch.active::after {
+  transform: translateX(20px);
 }
 </style>

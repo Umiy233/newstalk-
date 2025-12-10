@@ -9,7 +9,6 @@
           <span class="username">{{ targetUser?.username || '用户' }}</span>
           <div v-if="!isMutualFriend" class="limit-tag">陌生人</div>
         </div>
-        <button class="more-btn">⋯</button>
       </div>
 
       <div class="page-content" ref="messagesContainer">
@@ -67,9 +66,10 @@
       <div class="page-footer">
         
         <div class="input-bar">
-          <button class="icon-btn voice-btn">🎤</button>
+         
           <div class="input-box-wrapper">
             <input
+              ref="messageInputRef"
               v-model="messageContent"
               placeholder="发消息..."
               class="chat-input"
@@ -77,24 +77,27 @@
               @keydown.enter="sendMessage"
             />
           </div>
-          <div v-if="showEmojiPicker" class="emoji-picker-wrapper">
-            <EmojiPicker @select="handleEmojiSelect" :native="true" :disable-skin-tones="true"/>
-          </div>
           <button class="icon-btn emoji-btn" @click="showEmojiPicker = !showEmojiPicker">😊</button>
+          
           <button 
-            v-if="!messageContent.trim()" 
-            class="icon-btn plus-btn"
-          >
-            ⊕
-          </button>
-          <button 
-            v-else 
+             
             class="send-btn-small"
             :disabled="isSending"
             @click="sendMessage"
           >
             发送
           </button>
+        </div>
+        <div v-if="showEmojiPicker" class="emoji-picker-wrapper">
+          <EmojiPicker 
+            @select="handleEmojiSelect" 
+            :native="true" 
+            :disable-skin-tones="true"
+            :hide-search="true"
+            :hide-group-icons="false"
+            :static-texts="{ placeholder: '搜索表情' }"
+            class="custom-emoji-picker"
+          />
         </div>
       </div>
     </div>
@@ -108,6 +111,8 @@ import { apiClient } from '@/utils/api'
 import { formatDate } from '@/utils/common'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
+import EmojiPicker from 'vue3-emoji-picker'
+import 'vue3-emoji-picker/css'
 
 interface MessageUser {
   _id: string
@@ -154,6 +159,7 @@ const isLoading = ref(false)
 const isSending = ref(false)
 const hasSentMessage = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
+const messageInputRef = ref<HTMLInputElement | null>(null)
 const showEmojiPicker = ref(false)
 
 // 初始化 WebSocket 连接
@@ -219,13 +225,19 @@ const fetchConversation = async () => {
         (msg) => getSenderId(msg) === currentUserId
       )
       
-      // scrollToBottom()
+      // 标记所有接收到的消息为已读（本地状态更新）
+      // 因为已经在打开对话框时调用了 markConversationAsRead，这里同步本地状态
+      messages.value.forEach((msg) => {
+        if (getSenderId(msg) !== currentUserId) {
+          msg.isRead = true
+        }
+      })
     }
   } catch (error) {
     console.error('Failed to fetch conversation:', error)
   } finally {
     isLoading.value = false
-    nextTick(()=>{
+    nextTick(() => {
       scrollToBottom()
     })
   }
@@ -267,8 +279,29 @@ const sendMessage = async () => {
 }
 
 //表情处理
-const handleEmojiSelect = (emoji:string)=>{
-//  TODO弹窗没有
+
+
+//表情处理
+const handleEmojiSelect = (emoji: any) => {
+  const input = messageInputRef.value
+  const emojiText = emoji.i || emoji
+  
+  if (input) {
+    const start = input.selectionStart || 0
+    const end = input.selectionEnd || 0
+    messageContent.value = messageContent.value.substring(0, start) + emojiText + messageContent.value.substring(end)
+    
+    // Move cursor after the inserted emoji
+    nextTick(() => {
+      input.focus()
+      const newPosition = start + emojiText.length
+      input.setSelectionRange(newPosition, newPosition)
+    })
+  } else {
+    messageContent.value += emojiText
+  }
+  
+  showEmojiPicker.value = false
 }
 
 // 滚动到底部
@@ -316,11 +349,9 @@ const getSenderAvatar = (message: Message): string | undefined => {
 const markConversationAsRead = async () => {
   if (!props.targetUserId || !currentUserId) return
 
-  console.log('🟡 Marking conversation as read for user:', props.targetUserId)
-
   try {
+    // 立即调用API标记为已读，不等待
     await apiClient.put(`/messages/conversation/${props.targetUserId}/read`)
-    console.log('✅ Successfully marked as read, emitting read event')
     // 触发父组件更新未读数，传递用户ID
     emit('read', props.targetUserId)
   } catch (error) {
@@ -337,12 +368,12 @@ const handleClick =(message:Message)=>{
 }
 
 // 监听 visible 变化
-watch(() => props.visible, (newVisible) => {
+watch(() => props.visible, async (newVisible) => {
   if (newVisible) {
+    // 立即标记为已读，不等待消息加载
+    await markConversationAsRead()
     initSocket()
     fetchConversation()
-    // 对话框打开时标记为已读
-    markConversationAsRead()
   } else {
     disconnectSocket()
   }
@@ -357,8 +388,10 @@ const shouldShowTime = (message: Message) => {
   return timeDiff > 5 * 60 * 1000
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (props.visible) {
+    // 立即标记为已读，不等待消息加载
+    await markConversationAsRead()
     initSocket()
     fetchConversation()
   }
@@ -389,8 +422,9 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: 0 12px;
   background: var(--bg-color);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+  position: relative;
 }
 
 .back-btn, .more-btn {
@@ -406,6 +440,10 @@ onUnmounted(() => {
 }
 
 .header-title {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -418,7 +456,7 @@ onUnmounted(() => {
 
 .limit-tag {
   font-size: 10px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--hover-color);
   padding: 1px 6px;
   border-radius: 4px;
   margin-top: 2px;
@@ -428,7 +466,7 @@ onUnmounted(() => {
 .page-content {
   flex: 1;
   overflow-y: auto;
-  background: #1c1c1e; /* Slightly different dark bg */
+  background: var(--bg-secondary);
   padding: 16px 12px;
 }
 
@@ -451,7 +489,7 @@ onUnmounted(() => {
 .time-stamp {
   align-self: center;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--text-tertiary);
   margin-bottom: 12px;
 }
 
@@ -469,7 +507,7 @@ onUnmounted(() => {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background-color: #333;
+  background-color: var(--bg-secondary);
   background-size: cover;
   background-position: center;
   flex-shrink: 0;
@@ -481,7 +519,7 @@ onUnmounted(() => {
 .avatar-text {
   font-size: 14px;
   font-weight: 600;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .bubble {
@@ -489,14 +527,14 @@ onUnmounted(() => {
   border-radius: 12px;
   font-size: 15px;
   line-height: 1.5;
-  background: #2c2c2e;
-  color: white;
+  background: light-dark(rgba(0, 0, 0, 0.05), #2c2c2e);
+  color: var(--text-primary);
   position: relative;
   word-wrap: break-word;
 }
 
 .message-sent .bubble {
-  background: #0a84ff; /* iOS Blue style */
+  background: var(--primary-color);
   color: white;
 }
 
@@ -504,7 +542,7 @@ onUnmounted(() => {
   background: var(--bg-color);
   padding: 8px 12px;
   padding-bottom: max(8px, env(safe-area-inset-bottom));
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid var(--border-color);
 }
 
 .input-bar {
@@ -515,7 +553,7 @@ onUnmounted(() => {
 
 .input-box-wrapper {
   flex: 1;
-  background: #2c2c2e;
+  background: var(--bg-secondary);
   border-radius: 20px;
   padding: 8px 12px;
   display: flex;
@@ -526,33 +564,47 @@ onUnmounted(() => {
   width: 100%;
   background: transparent;
   border: none;
-  color: white;
+  color: var(--text-primary);
   font-size: 15px;
   padding: 0;
   outline: none;
+}
+
+.chat-input::placeholder {
+  color: var(--text-tertiary);
 }
 
 .icon-btn {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 1px solid #444;
+  border: 1px solid var(--border-color);
   background: transparent;
-  color: white;
+  color: var(--text-primary);
   font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background 0.2s;
+}
+
+.icon-btn:hover {
+  background: var(--hover-color);
 }
 
 .send-btn-small {
   padding: 6px 12px;
-  background: #0a84ff;
+  background: var(--primary-color);
   color: white;
   border: none;
   border-radius: 16px;
   font-size: 13px;
   font-weight: 600;
+  transition: opacity 0.2s;
+}
+
+.send-btn-small:hover {
+  opacity: 0.9;
 }
 
 /* Slide Transition */
@@ -568,8 +620,41 @@ onUnmounted(() => {
 
 .limit-tip {
   text-align: center;
-  color: #999;
+  color: var(--text-tertiary);
   margin-bottom: 12px;
+}
+
+.emoji-picker-wrapper {
+  width: 100%;
+  height: 300px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-color);
+}
+
+:deep(.v3-emoji-picker) {
+  width: 100% !important;
+  height: 100% !important;
+  background: var(--bg-color) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  --ep-color-bg: var(--bg-color) !important;
+  --ep-color-text: var(--text-primary) !important;
+  --ep-color-border: var(--border-color) !important;
+  --ep-color-hover: var(--hover-color) !important;
+  --ep-color-active: var(--hover-color) !important;
+  --ep-color-sbar: var(--border-color) !important;
+}
+
+:deep(.v3-header .v3-group) {
+  filter: invert(1) brightness(2);
+}
+
+:deep(.v3-sticky) {
+  display: none !important;
+}
+
+:deep(.v3-footer) {
+  display: none !important;
 }
 </style>
 

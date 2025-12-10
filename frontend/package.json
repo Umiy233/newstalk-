@@ -11,6 +11,10 @@
   },
   "dependencies": {
     "@arco-design/web-vue": "^2.55.0",
+    "@tiptap/core": "^3.13.0",
+    "@tiptap/extension-placeholder": "^3.13.0",
+    "@tiptap/starter-kit": "^3.13.0",
+    "@tiptap/vue-3": "^3.13.0",
     "axios": "^1.6.2",
     "dayjs": "^1.11.10",
     "dexie": "^3.2.4",

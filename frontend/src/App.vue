@@ -10,12 +10,15 @@
 
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 import { onMounted } from 'vue'
 
 const authStore = useAuthStore()
+const themeStore = useThemeStore()
 
 onMounted(() => {
   authStore.initAuth()
+  themeStore.initTheme()
 })
 </script>
 
